@@ -3,29 +3,14 @@ name: Terraform CI/CD Pipeline
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'terraform/**'
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'terraform/**'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
 
-# 🔑 CRITICAL FIX #1: Top-level permissions block for OIDC
+# 🔑 CRITICAL: Top-level permissions block for OIDC
 permissions:
   id-token: write   # Required for OIDC token exchange
-  contents: read    # Required for checkout
-  # No secrets permission needed - OIDC doesn't use secrets for auth
-
-env:
-  AWS_REGION: us-east-1
-  TF_VERSION: 1.6.6
-  TF_DIR: ./terraform/envs/prod
+  contents: read
 
 jobs:
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # STAGE 1: Validate (NO AWS CREDENTIALS NEEDED)
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   validate:
     runs-on: ubuntu-latest
     steps:
@@ -35,32 +20,26 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: ${{ env.TF_VERSION }}
+          terraform_version: 1.6.6
 
       # ✅ NO AWS CREDENTIALS NEEDED FOR VALIDATION
       - name: Terraform Init (backend=false)
-        working-directory: ${{ env.TF_DIR }}
+        working-directory: ./terraform/envs/prod
         run: terraform init -backend=false
 
       - name: Terraform Validate
-        working-directory: ${{ env.TF_DIR }}
+        working-directory: ./terraform/envs/prod
         run: terraform validate
 
       - name: Terraform Format Check
         working-directory: ./terraform
-        run: |
-          if ! terraform fmt -check -recursive -diff; then
-            echo "❌ terraform fmt checks failed. Run 'terraform fmt' locally."
-            exit 1
-          fi
+        run: terraform fmt -check -recursive
 
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # STAGE 2: Plan Infrastructure (VPC, RDS, ALB, S3 Bucket)
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  plan-infrastructure:
+  plan:
     needs: validate
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+    if: github.ref == 'refs/heads/main'
+    environment: production  # Required for OIDC trust policy match
     
     steps:
       - name: Checkout
@@ -69,144 +48,37 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: ${{ env.TF_VERSION }}
+          terraform_version: 1.6.6
 
-      # 🔑 CRITICAL FIX #2: Use real account ID from secrets
+      # ✅ FIX: Use REAL account ID from secret (NOT hardcoded 123456789012)
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-terraform-prod
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: us-east-1
 
-      # ✅ SAFE: Only non-sensitive vars in plan (secrets hidden by Terraform)
       - name: Terraform Init
-        working-directory: ${{ env.TF_DIR }}
+        working-directory: ./terraform/envs/prod
         run: terraform init
-
-      - name: Terraform Workspace
-        working-directory: ${{ env.TF_DIR }}
-        run: |
-          terraform workspace select prod || terraform workspace new prod
 
       - name: Terraform Plan
-        id: plan
-        working-directory: ${{ env.TF_DIR }}
-        run: |
-          terraform plan \
-            -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
-            -var="domain_name=${{ secrets.DOMAIN_NAME }}" \
-            -var="route53_zone_id=${{ secrets.ROUTE53_ZONE_ID }}" \
-            -var="bastion_cidrs=[\"${{ secrets.CORPORATE_IP }}/32\"]" \
-            -var="db_password=***REDACTED***" \  # Terraform will mask this
-            -out=tfplan.binary
-          
-          # Check if plan has changes
-          terraform show -json tfplan.binary | jq -r '.resource_changes | length > 0' > /tmp/has_changes
-        continue-on-error: true  # Allow PRs to show plan even if it fails
-
-      - name: Save Plan
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan-${{ github.run_id }}
-          path: ${{ env.TF_DIR }}/tfplan.binary
-          retention-days: 1
-
-      - name: Comment Plan on PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const plan = fs.readFileSync('${{ env.TF_DIR }}/tfplan.binary', 'utf8');
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '### Terraform Plan\n```hcl\n' + plan.substring(0, 65000) + '\n```\n_**Note:** Full plan available in workflow artifacts_'
-            });
-
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # STAGE 3: Apply Infrastructure (Creates S3 Bucket + ACM Cert)
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  apply-infrastructure:
-    needs: plan-infrastructure
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    environment: production  # Requires manual approval
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Configure AWS Credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-terraform-prod
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Download Plan
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan-${{ github.run_id }}
-          path: ${{ env.TF_DIR }}
-
-      - name: Terraform Init
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform init
-
-      - name: Terraform Workspace
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform workspace select prod
-
-      # 🔑 CRITICAL FIX #3: Inject secrets SECURELY (not in tfvars file)
-      - name: Terraform Apply
-        working-directory: ${{ env.TF_DIR }}
+        working-directory: ./terraform/envs/prod
         env:
-          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
           TF_VAR_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
           TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
           TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
           TF_VAR_bastion_cidrs: "[\"${{ secrets.CORPORATE_IP }}/32\"]"
-        run: terraform apply -input=false tfplan.binary
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+        run: terraform plan -out=tfplan.binary
 
-      # ✅ Parse outputs AFTER apply (bucket now exists)
-      - name: Parse Terraform Outputs
-        id: outputs
-        working-directory: ${{ env.TF_DIR }}
-        run: |
-          # Get outputs as JSON
-          OUTPUTS=$(terraform output -json)
-          
-          # Extract bucket name (non-sensitive)
-          BUCKET=$(echo "$OUTPUTS" | jq -r '.artifact_bucket.value')
-          echo "artifact_bucket=$BUCKET" >> $GITHUB_OUTPUT
-          
-          # Extract ALB DNS
-          ALB_DNS=$(echo "$OUTPUTS" | jq -r '.alb_dns.value')
-          echo "alb_dns=$ALB_DNS" >> $GITHUB_OUTPUT
-          
-          echo "✅ Infrastructure deployed:"
-          echo "   - Artifact Bucket: $BUCKET"
-          echo "   - ALB DNS: $ALB_DNS"
-
-      - name: Save Outputs
+      - name: Upload Plan
         uses: actions/upload-artifact@v4
         with:
-          name: tf-outputs-${{ github.run_id }}
-          path: ${{ env.TF_DIR }}/terraform.tfstate
-          retention-days: 1
+          name: tfplan
+          path: ./terraform/envs/prod/tfplan.binary
 
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # STAGE 4: Deploy Application (Upload JAR to S3 + Update ASG)
-  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  deploy-app:
-    needs: apply-infrastructure
+  apply:
+    needs: plan
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     environment: production
@@ -218,74 +90,23 @@ jobs:
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-terraform-prod
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-terraform-prod  # ✅ REAL ACCOUNT ID
+          aws-region: us-east-1
 
-      - name: Download Outputs
+      - name: Download Plan
         uses: actions/download-artifact@v4
         with:
-          name: tf-outputs-${{ github.run_id }}
-          path: /tmp/outputs
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Build Java Application
-        run: |
-          ./mvnw clean package -DskipTests
-          JAR_FILE=$(find target -name "*.jar" -type f | head -n1)
-          if [ -z "$JAR_FILE" ]; then
-            echo "❌ No JAR file found in target directory"
-            exit 1
-          fi
-          echo "JAR_FILE=$JAR_FILE" >> $GITHUB_ENV
-          echo "ARTIFACT_KEY=app-${{ github.sha }}.jar" >> $GITHUB_ENV
-          echo "✅ Built: $JAR_FILE"
-
-      # ✅ NOW SAFE TO UPLOAD: Bucket was created in previous job
-      - name: Upload Artifact to S3
-        env:
-          ARTIFACT_BUCKET: ${{ needs.apply-infrastructure.outputs.artifact_bucket }}
-        run: |
-          aws s3 cp ${{ env.JAR_FILE }} s3://${{ env.ARTIFACT_BUCKET }}/${{ env.ARTIFACT_KEY }}
-          echo "✅ Uploaded to s3://${{ env.ARTIFACT_BUCKET }}/${{ env.ARTIFACT_KEY }}"
+          name: tfplan
+          path: ./terraform/envs/prod
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: ${{ env.TF_VERSION }}
+          terraform_version: 1.6.6
 
-      - name: Update App with New Artifact
-        working-directory: ${{ env.TF_DIR }}
+      - name: Terraform Apply
+        working-directory: ./terraform/envs/prod
         env:
-          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
           TF_VAR_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
-          TF_VAR_artifact_key: ${{ env.ARTIFACT_KEY }}
-          TF_VAR_artifact_bucket: ${{ needs.apply-infrastructure.outputs.artifact_bucket }}
-        run: |
-          terraform init
-          terraform workspace select prod
-          terraform apply -var="artifact_key=${{ env.ARTIFACT_KEY }}" -auto-approve
-
-      - name: Verify Deployment
-        env:
-          ALB_DNS: ${{ needs.apply-infrastructure.outputs.alb_dns }}
-        run: |
-          echo "⏳ Waiting 60s for instances to register with ALB..."
-          sleep 60
-          
-          # Check health endpoint 5 times
-          for i in {1..5}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 10 "http://${{ env.ALB_DNS }}/actuator/health" || echo "000")
-            if [ "$STATUS" = "200" ]; then
-              echo "✅ Application healthy (HTTP $STATUS)"
-              exit 0
-            fi
-            echo "⏳ Attempt $i/5: Health check returned HTTP $STATUS (waiting 15s)..."
-            sleep 15
-          done
-          echo "❌ Application failed health checks after 5 attempts"
-          exit 1
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+        run: terraform apply -input=false tfplan.binary
