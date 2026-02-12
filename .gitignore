@@ -1,0 +1,22 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.tfplan
+*.tfsec
+.terraform.lock.hcl
+
+# Sensitive files
+secrets.tf
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*~
