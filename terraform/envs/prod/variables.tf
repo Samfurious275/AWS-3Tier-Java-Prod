@@ -44,7 +44,7 @@ variable "azs" {
 variable "bastion_cidrs" {
   description = "CIDR blocks allowed to access bastion (optional)"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # 🔒 RESTRICT TO CORPORATE IP IN PRODUCTION
+  default     = ["0.0.0.0/0"]
 }
 
 # Application Configuration
@@ -57,7 +57,7 @@ variable "app_port" {
 variable "ami_id" {
   description = "AMI ID (Amazon Linux 2)"
   type        = string
-  default     = "ami-0c02fb55956c7d336"  # us-east-1 AL2 - UPDATE FOR YOUR REGION
+  default     = "ami-0c02fb55956c7d336"
 }
 
 variable "instance_type" {
@@ -89,13 +89,11 @@ variable "asg_desired_capacity" {
   type        = number
   default     = 2
 }
-<<<<<<< HEAD
 
-# 🔑 CRITICAL FIX: ONLY ONE declaration of artifact_key
 variable "artifact_key" {
   description = "S3 key for Java JAR artifact (e.g., app-v1.2.3.jar)"
   type        = string
-  default     = "app-latest.jar"  # Will be overridden by CI/CD
+  default     = "app-latest.jar"
 }
 
 # Database Configuration
@@ -131,10 +129,6 @@ variable "domain_name" {
 
 variable "subject_alternative_names" {
   description = "Additional domains for certificate"
-=======
-variable "bastion_cidrs" {
-  description = "CIDRs allowed to SSH (optional)"
->>>>>>> 24b4329 (feat: initial commit - 3-tier Java app infrastructure)
   type        = list(string)
   default     = []
 }
