@@ -89,6 +89,7 @@ variable "asg_desired_capacity" {
   type        = number
   default     = 2
 }
+<<<<<<< HEAD
 
 # 🔑 CRITICAL FIX: ONLY ONE declaration of artifact_key
 variable "artifact_key" {
@@ -130,6 +131,10 @@ variable "domain_name" {
 
 variable "subject_alternative_names" {
   description = "Additional domains for certificate"
+=======
+variable "bastion_cidrs" {
+  description = "CIDRs allowed to SSH (optional)"
+>>>>>>> 24b4329 (feat: initial commit - 3-tier Java app infrastructure)
   type        = list(string)
   default     = []
 }

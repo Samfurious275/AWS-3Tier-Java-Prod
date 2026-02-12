@@ -4,19 +4,32 @@
 *.tfstate.*
 *.tfvars
 *.tfvars.json
-*.tfplan
-*.tfsec
-.terraform.lock.hcl
+terraform.tfvars
+terraform.tfstate
+terraform.tfstate.backup
+crash.log
+crash.*.log
 
 # Sensitive files
+*.pem
+*.key
+*.crt
+*.cert
 secrets.tf
-override.tf
-override.tf.json
-*_override.tf
-*_override.tf.json
+backend.tf
 
-# IDE/editor files
-.vscode/
-.idea/
+# OS/Editor files
+.DS_Store
 *.swp
 *~
+.vscode/
+.idea/
+*.log
+
+# Build artifacts
+target/
+build/
+*.jar
+*.war
+*.ear
+node_modules/
