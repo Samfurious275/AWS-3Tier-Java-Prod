@@ -18,6 +18,9 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # 👈 REQUIRED for OIDC
+      contents: read    # 👈 REQUIRED to checkout code
     steps:
       - name: Checkout
         uses: actions/checkout@v4
