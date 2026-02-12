@@ -34,5 +34,5 @@ variable "db_port" {
 variable "bastion_cidrs" {
   description = "CIDR blocks allowed to SSH (optional bastion)"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # 🔒 RESTRICT IN PRODUCTION!
+  default     = ["0.0.0.0/0"] # 🔒 RESTRICT IN PRODUCTION!
 }

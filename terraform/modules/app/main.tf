@@ -45,7 +45,7 @@ resource "aws_launch_template" "this" {
   name_prefix   = "${var.environment}-app-"
   image_id      = var.ami_id
   instance_type = var.instance_type
-  
+
 
   iam_instance_profile {
     arn = aws_iam_instance_profile.app.arn
@@ -67,8 +67,8 @@ resource "aws_launch_template" "this" {
     }
   }
 
- monitoring {
-    enabled = true  
+  monitoring {
+    enabled = true
   }
 
   tag_specifications {
@@ -136,7 +136,7 @@ SERVICE_EOF
   EOF
   )
 
-  
+
   lifecycle {
     create_before_destroy = true
   }

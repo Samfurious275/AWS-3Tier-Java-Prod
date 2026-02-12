@@ -9,7 +9,7 @@ terraform {
 
 resource "aws_s3_bucket" "artifacts" {
   bucket        = "${var.bucket_prefix}-${var.environment}-${var.account_id}"
-  force_destroy = false  # Prevent accidental deletion
+  force_destroy = false # Prevent accidental deletion
 
   tags = merge(
     var.common_tags,
@@ -55,7 +55,7 @@ resource "aws_s3_bucket_policy" "artifacts" {
         Effect    = "Deny"
         Principal = "*"
         Action    = "s3:*"
-        Resource  = [
+        Resource = [
           aws_s3_bucket.artifacts.arn,
           "${aws_s3_bucket.artifacts.arn}/*"
         ]
@@ -66,8 +66,8 @@ resource "aws_s3_bucket_policy" "artifacts" {
         }
       },
       {
-        Sid       = "AllowCIRole"
-        Effect    = "Allow"
+        Sid    = "AllowCIRole"
+        Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:role/github-terraform-prod"
         }
@@ -75,7 +75,7 @@ resource "aws_s3_bucket_policy" "artifacts" {
           "s3:PutObject",
           "s3:GetObject",
           "s3:ListBucket",
-          "s3:DeleteObject"  # For cleanup in dev/staging
+          "s3:DeleteObject" # For cleanup in dev/staging
         ]
         Resource = [
           aws_s3_bucket.artifacts.arn,
@@ -91,7 +91,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
   bucket = aws_s3_bucket.artifacts.id
 
   rule {
-    id = "expire-old-versions"
+    id     = "expire-old-versions"
     status = "Enabled"
 
     noncurrent_version_expiration {

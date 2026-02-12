@@ -31,7 +31,7 @@ resource "aws_lb_target_group" "app" {
   target_type = "instance"
 
   health_check {
-    path                = "/actuator/health"  # Spring Boot actuator endpoint
+    path                = "/actuator/health" # Spring Boot actuator endpoint
     interval            = 30
     timeout             = 5
     healthy_threshold   = 3
@@ -63,7 +63,7 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = var.ssl_certificate_arn  # ACM certificate ARN
+  certificate_arn   = var.ssl_certificate_arn # ACM certificate ARN
 
   default_action {
     type             = "forward"

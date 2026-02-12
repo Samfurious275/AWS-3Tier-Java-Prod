@@ -40,9 +40,9 @@ resource "aws_subnet" "public" {
   tags = merge(
     var.common_tags,
     {
-      Name                                        = "${var.environment}-public-${count.index}"
-      "kubernetes.io/role/elb"                    = "1"
-      "kubernetes.io/role/internal-elb"           = "1"
+      Name                              = "${var.environment}-public-${count.index}"
+      "kubernetes.io/role/elb"          = "1"
+      "kubernetes.io/role/internal-elb" = "1"
     }
   )
 }
@@ -57,8 +57,8 @@ resource "aws_subnet" "private" {
   tags = merge(
     var.common_tags,
     {
-      Name                                        = "${var.environment}-private-${count.index}"
-      "kubernetes.io/role/internal-elb"           = "1"
+      Name                              = "${var.environment}-private-${count.index}"
+      "kubernetes.io/role/internal-elb" = "1"
     }
   )
 }
@@ -79,7 +79,7 @@ resource "aws_subnet" "db" {
 # ========== EIP for NAT ==========
 resource "aws_eip" "nat" {
   count      = length(var.azs)
-  domain     = "vpc" 
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.this]
 
   tags = merge(
@@ -149,13 +149,13 @@ resource "aws_route_table_association" "private" {
 resource "aws_route_table_association" "db" {
   count          = length(var.azs)
   subnet_id      = aws_subnet.db[count.index].id
-  route_table_id = aws_route_table.private[count.index].id  # No internet access
+  route_table_id = aws_route_table.private[count.index].id # No internet access
 }
 
 # ========== Security Groups ==========
 resource "aws_security_group" "alb" {
-  vpc_id = aws_vpc.this.id
-  name   = "${var.environment}-alb-sg"
+  vpc_id      = aws_vpc.this.id
+  name        = "${var.environment}-alb-sg"
   description = "ALB security group"
 
   ingress {
@@ -183,8 +183,8 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "app" {
-  vpc_id = aws_vpc.this.id
-  name   = "${var.environment}-app-sg"
+  vpc_id      = aws_vpc.this.id
+  name        = "${var.environment}-app-sg"
   description = "App tier security group"
 
   ingress {
@@ -198,7 +198,7 @@ resource "aws_security_group" "app" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = var.bastion_cidrs  # Optional: restrict to jump host only
+    cidr_blocks = var.bastion_cidrs # Optional: restrict to jump host only
   }
 
   egress {
@@ -212,8 +212,8 @@ resource "aws_security_group" "app" {
 }
 
 resource "aws_security_group" "db" {
-  vpc_id = aws_vpc.this.id
-  name   = "${var.environment}-db-sg"
+  vpc_id      = aws_vpc.this.id
+  name        = "${var.environment}-db-sg"
   description = "DB tier security group"
 
   ingress {
