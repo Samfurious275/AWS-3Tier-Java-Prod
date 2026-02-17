@@ -42,23 +42,39 @@ resource "aws_lb_target_group" "app" {
   tags = merge(var.common_tags, { Name = "${var.environment}-tg" })
 }
 
+# HTTP listener ALWAYS exists (with conditional redirect)
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.this.arn
   port              = 80
   protocol          = "HTTP"
 
-  default_action {
-    type = "redirect"
+  # 🔑 FREE TIER FIX: Only redirect to HTTPS if certificate exists
+  dynamic "default_action" {
+    for_each = var.ssl_certificate_arn != null ? [1] : []
+    content {
+      type = "redirect"
+      redirect {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+  }
 
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
+  # Fallback: Forward to app if no HTTPS
+  dynamic "default_action" {
+    for_each = var.ssl_certificate_arn == null ? [1] : []
+    content {
+      type             = "forward"
+      target_group_arn = aws_lb_target_group.app.arn
     }
   }
 }
 
 resource "aws_lb_listener" "https" {
+   # 🔑 FREE TIER FIX: Only create if certificate ARN provided
+  count = var.ssl_certificate_arn != null ? 1 : 0
+
   load_balancer_arn = aws_lb.this.arn
   port              = 443
   protocol          = "HTTPS"
