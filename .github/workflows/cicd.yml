@@ -58,7 +58,7 @@ jobs:
 
           aws-region: us-east-1
         
-          audience: sts.amazonaws.com  
+      
 
       - name: Terraform Init
         working-directory: ./terraform/envs/prod
