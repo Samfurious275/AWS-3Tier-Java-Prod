@@ -71,6 +71,11 @@ variable "root_volume_size" {
   type        = number
   default     = 30
 }
+variable "enable_https" {
+  description = "Enable HTTPS with ACM certificate (disable for Free Tier testing)"
+  type        = bool
+  default     = false  # 🔑 FREE TIER FIX: Start with HTTP only
+}
 
 variable "asg_min_size" {
   description = "ASG min size"
