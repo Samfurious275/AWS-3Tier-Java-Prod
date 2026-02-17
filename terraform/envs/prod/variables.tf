@@ -125,7 +125,6 @@ variable "db_password" {
 variable "domain_name" {
   description = "Primary domain for ALB (e.g., app.yourcompany.com)"
   type        = string
-  default     = "34.205.124.173.sslip.io"  # ❌ REPLACE WITH YOUR ACTUAL ALB IP
 
 }
 
