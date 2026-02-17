@@ -33,7 +33,7 @@ jobs:
       # ✅ NO AWS CREDENTIALS NEEDED FOR VALIDATION
       - name: Terraform Init
         working-directory: ./terraform/envs/prod
-        run: terraform init -reconfigure -backend=false
+        run: terraform init 
 
       - name: Terraform Validate
         working-directory: ./terraform/envs/prod
