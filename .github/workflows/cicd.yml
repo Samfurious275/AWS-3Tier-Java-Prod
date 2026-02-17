@@ -5,75 +5,71 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-# 🔑 CRITICAL: Top-level permissions block for OIDC
 permissions:
-  id-token: write   # Required for OIDC token exchange
+  id-token: write
   contents: read
 
+env:
+  TF_VERSION: 1.6.6
+  AWS_REGION: us-east-1
+
 jobs:
+
   validate:
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: terraform/envs/prod
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.6.6
-           # ⚠️ CRITICAL: Reset provider cache to avoid invalid versions
+          terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
-          # Add this to force clean provider fetch:
-      - name: Clean Terraform Provider Cache
-        run: |
-          rm -rf .terraform .terraform.lock.hcl
-        working-directory: ./terraform/envs/prod
-    
 
-      # ✅ NO AWS CREDENTIALS NEEDED FOR VALIDATION
+      - name: Clean Terraform Cache
+        run: rm -rf .terraform
+
       - name: Terraform Init
-        working-directory: ./terraform/envs/prod
-        run: terraform init 
+        run: terraform init -backend=false
 
       - name: Terraform Validate
-        working-directory: ./terraform/envs/prod
         run: terraform validate
 
       - name: Terraform Format Check
-        working-directory: ./terraform
         run: terraform fmt -check -recursive
+
 
   plan:
     needs: validate
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    environment: production  # Required for OIDC trust policy match
-    
+    environment: production
+
+    defaults:
+      run:
+        working-directory: terraform/envs/prod
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.6.6
+          terraform_version: ${{ env.TF_VERSION }}
 
-      # ✅ FIX: Use REAL account ID from secret (NOT hardcoded 123456789012)
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-terraform-prod
-
-          aws-region: us-east-1
-        
-      
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
-        working-directory: ./terraform/envs/prod
         run: terraform init
 
       - name: Terraform Plan
-        working-directory: ./terraform/envs/prod
         env:
           TF_VAR_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
           TF_VAR_domain_name: ${{ secrets.DOMAIN_NAME }}
@@ -82,42 +78,49 @@ jobs:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: terraform plan -out=tfplan.binary
 
-      - name: Upload Plan
+      - name: Upload Plan Artifact
         uses: actions/upload-artifact@v4
         with:
           name: tfplan
-          path: ./terraform/envs/prod/tfplan.binary
+          path: terraform/envs/prod/tfplan.binary
+
 
   apply:
     needs: plan
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     environment: production
-    
+
+    defaults:
+      run:
+        working-directory: terraform/envs/prod
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
 
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-terraform-prod  # ✅ REAL ACCOUNT ID
-          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-terraform-prod
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Download Plan
         uses: actions/download-artifact@v4
         with:
           name: tfplan
-          path: ./terraform/envs/prod
+          path: terraform/envs/prod
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.6
+      # 🔥 CRITICAL FIX
+      - name: Terraform Init (Required Again)
+        run: terraform init
 
       - name: Terraform Apply
-        working-directory: ./terraform/envs/prod
         env:
           TF_VAR_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
-        run: terraform apply 
+        run: terraform apply -auto-approve tfplan.binary
+
