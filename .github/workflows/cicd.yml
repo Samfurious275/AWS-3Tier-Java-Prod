@@ -24,7 +24,7 @@ jobs:
            # ⚠️ CRITICAL: Reset provider cache to avoid invalid versions
           terraform_wrapper: false
           # Add this to force clean provider fetch:
-          terraform_cli_args: "init -reconfigure -backend=fals  
+          terraform_cli_args: "init -reconfigure -backend=false"
 
       # ✅ NO AWS CREDENTIALS NEEDED FOR VALIDATION
       - name: Terraform Init
