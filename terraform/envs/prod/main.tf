@@ -40,6 +40,8 @@ module "acm_certificate" {
   providers = {
     aws = aws.us_east_1
   }
+  # 🔑 FREE TIER FIX: Only create if enable_https = true
+  count = var.enable_https ? 1 : 0
 
   domain_name               = var.domain_name
   subject_alternative_names = var.subject_alternative_names
@@ -86,7 +88,8 @@ module "alb" {
   app_port                   = var.app_port
   environment                = var.environment
   common_tags                = var.common_tags
-  ssl_certificate_arn        = module.acm_certificate.certificate_arn # ✅ AUTO-VALIDATED
+  # 🔑 FREE TIER FIX: Conditional certificate ARN
+  ssl_certificate_arn    = var.enable_https ? module.acm_certificate[0].certificate_arn : null
   enable_deletion_protection = var.enable_deletion_protection
 }
 
