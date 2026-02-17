@@ -55,12 +55,10 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-terraform-prod
-<<<<<<< HEAD
-          
-=======
+
           aws-region: ${{ env.AWS_REGION }}
+        
           audience: sts.amazonaws.com  
->>>>>>> bd3f14b (addd cicdfils)
 
       - name: Terraform Init
         working-directory: ./terraform/envs/prod
