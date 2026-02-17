@@ -47,7 +47,7 @@ resource "aws_db_instance" "this" {
   port                                  = var.port
   publicly_accessible                   = false
   multi_az                              = true
-  backup_retention_period               = 7
+  backup_retention_period               = 1
   backup_window                         = "03:00-04:00"
   maintenance_window                    = "sun:04:00-sun:05:00"
   skip_final_snapshot                   = false
