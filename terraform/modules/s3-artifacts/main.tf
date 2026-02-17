@@ -93,6 +93,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
   rule {
     id     = "expire-old-versions"
     status = "Enabled"
+    filter {} # ✅ CRITICAL FIX: Add empty filter block (required by AWS API)
 
     noncurrent_version_expiration {
       noncurrent_days = 90
